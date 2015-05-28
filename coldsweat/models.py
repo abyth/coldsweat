@@ -51,13 +51,15 @@ class SqliteDatabase_(SqliteDatabase):
 
 def parse_connection_url(url):
     parsed = urlparse.urlparse(url, scheme='sqlite')
-    connect_kwargs = {'database': parsed.path[1:]}
+    connect_kwargs = {'database': parsed.path.split('/')[-1:]}
     if parsed.username:
         connect_kwargs['user'] = parsed.username
     if parsed.password:
         connect_kwargs['password'] = parsed.password
     if parsed.hostname:
         connect_kwargs['host'] = parsed.hostname
+    else:
+        connect_kwargs['host'] = "/".join(parsed.path.split('/')[:-1])
     if parsed.port:
         connect_kwargs['port'] = parsed.port
     
