@@ -2,7 +2,7 @@
 """
 Description: sweat utility commands
 
-Copyright (c) 2013—2015 Andrea Peltrin
+Copyright (c) 2013—2016 Andrea Peltrin
 License: MIT (see LICENSE for details)
 """
 import os, sys
@@ -22,7 +22,7 @@ from app import *
 import cascade, fever, frontend
 from utilities import render_template
 from plugins import trigger_event, load_plugins
-
+import filters
 
 class CommandError(Exception):
     pass
@@ -52,7 +52,7 @@ class CommandController(FeedController, UserController):
         '''Imports feeds from OPML file'''
     
         if not args:
-            raise CommandError('no OPML file given')
+            raise CommandError('no input OPML file given')
     
         self.user = self._get_user(options.username)
     
@@ -65,25 +65,44 @@ class CommandController(FeedController, UserController):
         
         print "Import%s completed for user %s. See log file for more information" % (' and fetch' if options.fetch_data else '', self.user.username)
 
-
     def command_export(self, options, args):
+        self.user = self._get_user(options.username)
+        if options.saved_entries:
+            self._export_saved_entries(options, args)
+        else:
+            self._export_feeds(options, args)
+        
+        print "Export completed for user %s." % self.user.username
+        
+    def _export_feeds(self, options, args):
         '''Exports feeds to OPML file'''
     
         if not args:
-            raise CommandError('no OPML file given')
-    
-        self.user = self._get_user(options.username)
+            raise CommandError('no output OPML file given')
     
         filename = args[0]
-        timestamp = format_http_datetime(datetime.utcnow())
-        
+        #@@TODO Use a 'http_datetime' filter in template instead
+        timestamp = format_http_datetime(datetime.utcnow())        
         groups = [ (group.title, self.get_group_feeds(group)) for group in self.get_groups() ]
         
         with open(filename, 'w') as f:
             f.write(render_template(os.path.join(template_dir, 'export.xml'), locals()))
-            
-        print "Export completed for user %s." % self.user.username
 
+    def _export_saved_entries(self, options, args):
+        '''Exports saved entries to Atom file'''
+        
+        if not args:
+            raise CommandError('no output Atom file given')
+        
+        filename = args[0]    
+        timestamp = datetime.utcnow()        
+        q = self.get_saved_entries()
+        guid = FEED_TAG_URI % (timestamp.year, make_sha1_hash(self.user.email or self.user.username))
+        version = VERSION_STRING
+
+        with open(filename, 'w') as f:
+            f.write(render_template(os.path.join(template_dir, 'export-saved.xml'), locals(), filters))
+            
 
     def command_refresh(self, options, args):
         '''Starts a feeds refresh procedure'''
@@ -116,11 +135,38 @@ class CommandController(FeedController, UserController):
  
     def command_setup(self, options, args):
         '''Setup a working database'''
-        username = options.username
-    
+        username = options.username        
+            
         setup_database_schema()
+
+        def get_password(label):
+          while True:
+              password = read_password(label)
+              if not User.validate_password(password):
+                  print 'Error: password should be at least %d characters long' % User.MIN_PASSWORD_LENGTH
+                  continue        
+              password_again = read_password("Enter password (again): ")
+              
+              if password != password_again:
+                  print "Error: passwords do not match, please try again"
+              else:
+                  return password
+                            
+
+        # Just reset user password
+        if options.reset_password:
+          try:
+              user = User.get(User.username == username)
+          except User.DoesNotExist:
+              raise CommandError('unknown user %s, please select another username with the -u option' % username)
+
+          password = get_password("Reset password for user %s: " % username)
+          user.password = password
+          user.save()
+
+          return 
     
-        # Check if username is already in use
+        # Regular setup process. Check if username is already in use
         try:
             User.get(User.username == username)
             raise CommandError('user %s already exists, please select another username with the -u option' % username)
@@ -128,18 +174,7 @@ class CommandController(FeedController, UserController):
             pass
     
         email = raw_input('Enter e-mail for user %s (needed for Fever sync, hit enter to leave blank): ' % username)
-
-        while True:
-            password = read_password("Enter password for user %s: " % username)
-            if not User.validate_password(password):
-                print 'Error: password should be at least %d characters long' % User.MIN_PASSWORD_LENGTH
-                continue        
-            password_again = read_password("Enter password (again): ")
-            
-            if password != password_again:
-                print "Error: passwords do not match, please try again"
-            else:
-                break
+        password = get_password("Enter password for user %s: " % username)
     
         User.create(username=username, email=email, password=password)
         print "Setup completed for user %s." % username
@@ -176,12 +211,21 @@ def run():
     usage='%prog command [options] [args]'
 
     available_options = [
+        make_option('-s', '--saved-entries',
+            dest='saved_entries', action='store_true', help='export saved entries'),
+
         make_option('-u', '--username', 
             dest='username', default=User.DEFAULT_USERNAME, help="specifies a username (default is %s)" % User.DEFAULT_USERNAME),
+
+        make_option('-w', '--password',
+            dest='reset_password', action='store_true', help='reset a user password'),
+
         make_option('-f', '--fetch',
             dest='fetch_data', action='store_true', help='fetches each feed data after import'),
+
         make_option('-p', '--port', default='8080', 
             dest='port', type='int', help='specifies the port to serve on (default 8080)'),
+
         make_option('-r', '--allow-remote-access', action='store_true', dest='allow_remote_access', help='binds to 0.0.0.0 instead of localhost'),
     ]
         

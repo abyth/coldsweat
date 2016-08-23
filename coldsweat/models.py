@@ -2,7 +2,7 @@
 """
 Description: database models
 
-Copyright (c) 2013—2015 Andrea Peltrin
+Copyright (c) 2013—2016 Andrea Peltrin
 Portions are copyright (c) 2013 Rui Carmo
 License: MIT (see LICENSE for details)
 """
@@ -324,12 +324,14 @@ class Session(CustomModel):
 # ------------------------------------------------------
 
 def connect():
+    logger.debug('connecting')
     _db.connect()
 
 def transaction():
     return _db.transaction()
 
 def close():
+    logger.debug('closing connection')
     if not _db.is_closed():
         _db.close()
 
@@ -446,11 +448,8 @@ def setup_database_schema():
     for model in models:
         model.create_table(fail_silently=True)
 
-    # Create the bare minimum to boostrap system
-    with transaction():
-        
-        # Avoid duplicated default group
-        try:
-            Group.create(title=Group.DEFAULT_GROUP)        
-        except IntegrityError:
-            return
+    # Create the bare minimum to bootstrap system
+    try:
+        Group.create(title=Group.DEFAULT_GROUP)        
+    except IntegrityError:
+        return

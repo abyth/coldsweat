@@ -2,7 +2,7 @@
 """
 Description: Template filters
 
-Copyright (c) 2013—2015 Andrea Peltrin
+Copyright (c) 2013—2016 Andrea Peltrin
 License: MIT (see LICENSE for details)
 """
 import re, cgi, urllib, urlparse
@@ -55,12 +55,18 @@ def length(value):
     if value:
         return len(list(value))
     return 0
-    
+        
 @filter('datetime')
 def datetime(value):
     if value:        
         return utilities.format_datetime(value)
     return '—'
+
+@filter('iso_datetime')
+def iso_datetime(value):
+    if value:        
+        return utilities.format_iso_datetime(value)
+    return ''  
 
 @filter('date')
 def date(value):
