@@ -142,8 +142,8 @@ class User(CustomModel):
     def validate_credentials(username_or_email, password):        
         '''Lookup for and existing username/e-mail combo and password'''
         try:
-            user = User.get((User.username == username_or_email) | 
-                (User.email == username_or_email) & 
+            user = User.get(((User.username == username_or_email) | 
+                (User.email == username_or_email)) & 
                 (User.is_enabled == True))
         except User.DoesNotExist:
             return None
@@ -324,15 +324,15 @@ class Session(CustomModel):
 # ------------------------------------------------------
 
 def connect():
-    logger.debug('connecting')
+    logger.debug('opening connection')
     _db.connect()
 
 def transaction():
     return _db.transaction()
 
 def close():
-    logger.debug('closing connection')
     if not _db.is_closed():
+        logger.debug('closing connection')
         _db.close()
 
 def migrate_database_schema():
